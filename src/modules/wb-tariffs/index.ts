@@ -1,5 +1,6 @@
 import type { WbTariffSyncPayload } from "#modules/wb-tariffs/types.js";
 export { createWbTariffsClient, WbTariffsClientError } from "#modules/wb-tariffs/client.js";
+export { createWbTariffsRepository } from "#modules/wb-tariffs/repository.js";
 
 export type WbTariffsModule = {
     syncTariffs: () => Promise<WbTariffSyncPayload[]>;
