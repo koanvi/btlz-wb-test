@@ -1,7 +1,8 @@
-export type WbTariffRow = Record<string, unknown>;
+import type { WbTariffSyncPayload } from "#modules/wb-tariffs/types.js";
+export { createWbTariffsClient, WbTariffsClientError } from "#modules/wb-tariffs/client.js";
 
 export type WbTariffsModule = {
-    syncTariffs: () => Promise<WbTariffRow[]>;
+    syncTariffs: () => Promise<WbTariffSyncPayload[]>;
 };
 
 export function createWbTariffsModule(): WbTariffsModule {
@@ -11,3 +12,16 @@ export function createWbTariffsModule(): WbTariffsModule {
         },
     };
 }
+
+export type {
+    CreateTariffSnapshotData,
+    CreateTariffWarehouseData,
+    CreateWarehouseData,
+    WbTariffsApiData,
+    WbTariffsApiResponse,
+    WbTariffsApiWarehouseRow,
+    WbTariffSnapshotEntity,
+    WbTariffSyncPayload,
+    WbTariffWarehouseEntity,
+    WbWarehouseEntity,
+} from "#modules/wb-tariffs/types.js";
