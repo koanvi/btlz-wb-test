@@ -40,13 +40,6 @@ const envSchema = z.object({
     POSTGRES_DB: z.string(),
     POSTGRES_USER: z.string(),
     POSTGRES_PASSWORD: z.string(),
-    APP_PORT: z.union([
-        z.undefined(),
-        z
-            .string()
-            .regex(/^[0-9]+$/)
-            .transform((value) => parseInt(value)),
-    ]),
     WB_API_TOKEN: z.string(),
     GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string(),
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string(),
@@ -65,7 +58,6 @@ const parsedEnv = envSchema.parse({
     POSTGRES_USER: process.env.POSTGRES_USER,
     POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
     NODE_ENV: process.env.NODE_ENV,
-    APP_PORT: process.env.APP_PORT,
     WB_API_TOKEN: process.env.WB_API_TOKEN,
     GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY,

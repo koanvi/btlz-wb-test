@@ -1,4 +1,3 @@
-# your node version
 FROM node:20-alpine AS deps-prod
 
 WORKDIR /app

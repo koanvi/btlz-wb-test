@@ -1,6 +1,3 @@
-# provide a name if you wish
-# name: btlz-test
-
 networks:
   postgres-net:
     driver: bridge
