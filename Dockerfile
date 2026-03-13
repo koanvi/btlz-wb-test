@@ -5,11 +5,11 @@ WORKDIR /app
 
 COPY ./package*.json .
 
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 FROM deps-prod AS build
 
-RUN npm install --include=dev
+RUN npm ci
 
 COPY . .
 
@@ -22,3 +22,5 @@ WORKDIR /app
 COPY --from=build /app/package*.json .
 COPY --from=deps-prod /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+
+CMD ["node", "dist/app.js"]
