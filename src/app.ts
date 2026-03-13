@@ -1,22 +1,31 @@
-import { createGoogleSheetsModule } from "#modules/google-sheets/index.js";
-import { createWbTariffsModule } from "#modules/wb-tariffs/index.js";
+import env from "#config/env/env.js";
+import { createGoogleSheetsService } from "#modules/google-sheets/service.js";
+import { createWbTariffsService } from "#modules/wb-tariffs/service.js";
 import { migrate, seed } from "#postgres/knex.js";
-import { seconds } from "#utils/helpers.js";
 import { logger } from "#utils/logger.js";
 import { createScheduler } from "#utils/scheduler.js";
 
-const wbTariffsModule = createWbTariffsModule();
-const googleSheetsModule = createGoogleSheetsModule();
+const wbTariffsService = createWbTariffsService();
+const googleSheetsService = createGoogleSheetsService();
 
-const scheduler = createScheduler({
-    name: "wb-tariffs-sync",
-    intervalMs: seconds(60),
-    run: async () => {
-        const rows = await wbTariffsModule.syncTariffs();
-        await googleSheetsModule.updateRows(rows);
-        logger.info("Scheduled sync tick completed");
+const scheduler = createScheduler([
+    {
+        name: "wb-tariffs-sync",
+        cron: env.WB_TARIFFS_SYNC_CRON,
+        runOnStart: env.WB_TARIFFS_SYNC_RUN_ON_START,
+        run: async () => {
+            await wbTariffsService.syncCurrentTariffs();
+        },
     },
-});
+    {
+        name: "google-sheets-sync",
+        cron: env.GOOGLE_SHEETS_SYNC_CRON,
+        runOnStart: env.GOOGLE_SHEETS_SYNC_RUN_ON_START,
+        run: async () => {
+            await googleSheetsService.syncCurrentTariffs();
+        },
+    },
+]);
 
 await migrate.latest();
 await seed.run();

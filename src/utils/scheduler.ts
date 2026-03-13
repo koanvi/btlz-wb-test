@@ -1,10 +1,23 @@
 import { logger } from "#utils/logger.js";
 
+type CronField = {
+    wildcard: boolean;
+    allowedValues: Set<number>;
+};
+
+type ParsedCronExpression = {
+    minute: CronField;
+    hour: CronField;
+    dayOfMonth: CronField;
+    month: CronField;
+    dayOfWeek: CronField;
+};
+
 export type SchedulerTask = {
     name: string;
-    intervalMs: number;
     run: () => Promise<void> | void;
-    immediate?: boolean;
+    cron: string;
+    runOnStart?: boolean;
 };
 
 export type Scheduler = {
@@ -12,51 +25,215 @@ export type Scheduler = {
     stop: () => void;
 };
 
-export function createScheduler(task: SchedulerTask): Scheduler {
-    let timer: NodeJS.Timeout | undefined;
-    let isRunning = false;
+type SchedulerRuntimeTask = {
+    config: SchedulerTask;
+    parsedCron?: ParsedCronExpression;
+    timer?: NodeJS.Timeout;
+    isRunning: boolean;
+};
 
-    const execute = async () => {
-        if (isRunning) {
-            logger.warn(`Task "${task.name}" is still running. Skip current tick`);
+function createRange(start: number, end: number, step = 1): number[] {
+    const values: number[] = [];
+
+    for (let current = start; current <= end; current += step) {
+        values.push(current);
+    }
+
+    return values;
+}
+
+function parseCronPart(part: string, min: number, max: number): number[] {
+    const [rawRange, rawStep] = part.split("/");
+    const step = rawStep ? Number(rawStep) : 1;
+
+    if (!Number.isInteger(step) || step <= 0) {
+        throw new Error(`Invalid cron step "${part}"`);
+    }
+
+    if (rawRange === "*") {
+        return createRange(min, max, step);
+    }
+
+    if (rawRange.includes("-")) {
+        const [rawStart, rawEnd] = rawRange.split("-");
+        const start = Number(rawStart);
+        const end = Number(rawEnd);
+
+        if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
+            throw new Error(`Invalid cron range "${part}"`);
+        }
+
+        if (start < min || end > max) {
+            throw new Error(`Cron range "${part}" is out of bounds`);
+        }
+
+        return createRange(start, end, step);
+    }
+
+    const value = Number(rawRange);
+
+    if (!Number.isInteger(value) || value < min || value > max) {
+        throw new Error(`Invalid cron value "${part}"`);
+    }
+
+    return [value];
+}
+
+function parseCronField(field: string, min: number, max: number): CronField {
+    if (field === "*") {
+        return {
+            wildcard: true,
+            allowedValues: new Set(createRange(min, max)),
+        };
+    }
+
+    const allowedValues = new Set<number>();
+
+    for (const part of field.split(",")) {
+        for (const value of parseCronPart(part.trim(), min, max)) {
+            allowedValues.add(value);
+        }
+    }
+
+    return {
+        wildcard: false,
+        allowedValues,
+    };
+}
+
+function parseCronExpression(expression: string): ParsedCronExpression {
+    const parts = expression.trim().split(/\s+/);
+
+    if (parts.length !== 5) {
+        throw new Error(`Cron expression "${expression}" must contain 5 fields`);
+    }
+
+    return {
+        minute: parseCronField(parts[0], 0, 59),
+        hour: parseCronField(parts[1], 0, 23),
+        dayOfMonth: parseCronField(parts[2], 1, 31),
+        month: parseCronField(parts[3], 1, 12),
+        dayOfWeek: parseCronField(parts[4], 0, 6),
+    };
+}
+
+function matchesField(field: CronField, value: number): boolean {
+    return field.allowedValues.has(value);
+}
+
+function matchesCron(parsedCron: ParsedCronExpression, date: Date): boolean {
+    return (
+        matchesField(parsedCron.minute, date.getMinutes()) &&
+        matchesField(parsedCron.hour, date.getHours()) &&
+        matchesField(parsedCron.dayOfMonth, date.getDate()) &&
+        matchesField(parsedCron.month, date.getMonth() + 1) &&
+        matchesField(parsedCron.dayOfWeek, date.getDay())
+    );
+}
+
+function getNextCronDelayMs(parsedCron: ParsedCronExpression, from = new Date()): number {
+    const candidate = new Date(from);
+    candidate.setSeconds(0, 0);
+    candidate.setMinutes(candidate.getMinutes() + 1);
+
+    for (let attempt = 0; attempt < 366 * 24 * 60; attempt += 1) {
+        if (matchesCron(parsedCron, candidate)) {
+            return Math.max(candidate.getTime() - from.getTime(), 1000);
+        }
+
+        candidate.setMinutes(candidate.getMinutes() + 1);
+    }
+
+    throw new Error("Unable to calculate next run time from cron expression");
+}
+
+function validateTask(task: SchedulerTask): void {
+    if (!task.cron.trim()) {
+        throw new Error(`Task "${task.name}" must define cron expression`);
+    }
+}
+
+function getScheduleLabel(task: SchedulerRuntimeTask): string {
+    return `cron "${task.config.cron}"`;
+}
+
+export function createScheduler(tasks: SchedulerTask[]): Scheduler {
+    const runtimeTasks = tasks.map<SchedulerRuntimeTask>((task) => {
+        validateTask(task);
+
+        return {
+            config: task,
+            parsedCron: parseCronExpression(task.cron),
+            isRunning: false,
+        };
+    });
+
+    let isStarted = false;
+
+    const executeTask = async (task: SchedulerRuntimeTask) => {
+        if (task.isRunning) {
+            logger.warn(`Task "${task.config.name}" is still running. Skip current tick`);
             return;
         }
 
-        isRunning = true;
+        task.isRunning = true;
 
         try {
-            await task.run();
+            await task.config.run();
+            logger.info(`Task "${task.config.name}" completed`);
         } catch (error) {
-            logger.error(`Task "${task.name}" failed`, error);
+            logger.error(`Task "${task.config.name}" failed`, error);
         } finally {
-            isRunning = false;
+            task.isRunning = false;
         }
+    };
+
+    const scheduleNextRun = (task: SchedulerRuntimeTask) => {
+        if (!isStarted) {
+            return;
+        }
+
+        const delayMs = getNextCronDelayMs(task.parsedCron!);
+
+        task.timer = setTimeout(() => {
+            task.timer = undefined;
+            void executeTask(task);
+            scheduleNextRun(task);
+        }, delayMs);
     };
 
     return {
         start: () => {
-            if (timer) {
+            if (isStarted) {
                 return;
             }
 
-            if (task.immediate) {
-                void execute();
+            isStarted = true;
+
+            for (const task of runtimeTasks) {
+                if (task.config.runOnStart ?? true) {
+                    void executeTask(task);
+                }
+
+                scheduleNextRun(task);
+                logger.info(`Task "${task.config.name}" scheduled ${getScheduleLabel(task)}`);
             }
-
-            timer = setInterval(() => {
-                void execute();
-            }, task.intervalMs);
-
-            logger.info(`Task "${task.name}" scheduled every ${task.intervalMs} ms`);
         },
         stop: () => {
-            if (!timer) {
+            if (!isStarted) {
                 return;
             }
 
-            clearInterval(timer);
-            timer = undefined;
-            logger.info(`Task "${task.name}" stopped`);
+            isStarted = false;
+
+            for (const task of runtimeTasks) {
+                if (task.timer) {
+                    clearTimeout(task.timer);
+                    task.timer = undefined;
+                }
+
+                logger.info(`Task "${task.config.name}" stopped`);
+            }
         },
     };
 }
