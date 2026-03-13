@@ -100,10 +100,30 @@ export type GoogleSheetsTariffExportRow = {
 export type GoogleSheetsRepository = {
     getActiveSpreadsheets: () => Promise<GoogleSpreadsheetTarget[]>;
     getTariffsForExportByDate: (tariffDate?: string) => Promise<GoogleSheetsTariffExportRow[]>;
+    ensureSpreadsheets: (spreadsheetIds: string[], sheetName: string) => Promise<void>;
 };
 
 export function createGoogleSheetsRepository(db: DbExecutor = knex): GoogleSheetsRepository {
     return {
+        ensureSpreadsheets: async (spreadsheetIds, sheetName) => {
+            const uniqueSpreadsheetIds = [...new Set(spreadsheetIds.map((item) => item.trim()).filter((item) => item !== ""))];
+
+            for (const spreadsheetId of uniqueSpreadsheetIds) {
+                await db<SpreadsheetRow>("spreadsheets")
+                    .insert({
+                        spreadsheet_id: spreadsheetId,
+                        sheet_name: sheetName,
+                        is_active: true,
+                    })
+                    .onConflict("spreadsheet_id")
+                    .merge({
+                        sheet_name: sheetName,
+                        is_active: true,
+                        updated_at: db.fn.now(),
+                    });
+            }
+        },
+
         getActiveSpreadsheets: async () => {
             const rows = await db<SpreadsheetRow>("spreadsheets")
                 .select("*")

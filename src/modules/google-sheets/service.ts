@@ -1,3 +1,4 @@
+import env from "#config/env/env.js";
 import { createGoogleSheetsClient, type GoogleSheetsClient } from "#modules/google-sheets/client.js";
 import {
     createGoogleSheetsRepository,
@@ -5,7 +6,6 @@ import {
     type GoogleSheetsTariffExportRow,
 } from "#modules/google-sheets/repository.js";
 
-const DEFAULT_SHEET_NAME = "stocks_coefs";
 const DEFAULT_WRITE_RANGE = "A1";
 
 const SHEET_HEADERS = [
@@ -51,7 +51,7 @@ function toSheetRange(sheetName: string, range: string): string {
 
 function resolveSheetName(sheetName: string): string {
     const normalized = sheetName.trim();
-    return normalized === "" ? DEFAULT_SHEET_NAME : normalized;
+    return normalized === "" ? env.GOOGLE_SPREADSHEET_SHEET_NAME : normalized;
 }
 
 function mapExportRowToSheetRow(row: GoogleSheetsTariffExportRow): SheetCellValue[] {
@@ -91,6 +91,11 @@ export function createGoogleSheetsService(
         buildSheetValues,
 
         syncCurrentTariffs: async () => {
+            await repository.ensureSpreadsheets(
+                env.GOOGLE_SPREADSHEET_IDS,
+                env.GOOGLE_SPREADSHEET_SHEET_NAME,
+            );
+
             const [spreadsheets, tariffRows] = await Promise.all([
                 repository.getActiveSpreadsheets(),
                 repository.getTariffsForExportByDate(),
