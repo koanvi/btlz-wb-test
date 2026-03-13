@@ -1,7 +1,3 @@
-export function seconds(value: number): number {
-    return value * 1000;
-}
-
 export function getCurrentDateYmd(date = new Date()): string {
     return date.toISOString().slice(0, 10);
 }
@@ -72,5 +68,3 @@ export async function retry<T>(
 
     throw lastError;
 }
-
-export function noop(): void {}
