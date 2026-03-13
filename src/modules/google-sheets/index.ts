@@ -1,4 +1,5 @@
 export { createGoogleSheetsClient, GoogleSheetsClientError } from "#modules/google-sheets/client.js";
+export { createGoogleSheetsRepository } from "#modules/google-sheets/repository.js";
 
 export type GoogleSheetsModule = {
     updateRows: (rows: Record<string, unknown>[]) => Promise<void>;
