@@ -5,6 +5,8 @@ import { migrate, seed } from "#postgres/knex.js";
 import { logger } from "#utils/logger.js";
 import { createScheduler } from "#utils/scheduler.js";
 
+logger.info("Application starting");
+
 const wbTariffsService = createWbTariffsService();
 const googleSheetsService = createGoogleSheetsService();
 
@@ -27,11 +29,21 @@ const scheduler = createScheduler([
     },
 ]);
 
-await migrate.latest();
-await seed.run();
+try {
+    logger.info("Running migrations");
+    await migrate.latest();
+    logger.info("Migrations completed");
 
-logger.info("Bootstrap completed");
-scheduler.start();
+    logger.info("Running seeds");
+    await seed.run();
+    logger.info("Seeds completed");
+
+    logger.info("Bootstrap completed");
+    scheduler.start();
+} catch (error) {
+    logger.error("Application bootstrap failed", error);
+    process.exit(1);
+}
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {

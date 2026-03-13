@@ -1,3 +1,4 @@
+import { createJobRunsRepository } from "#utils/job-runs.js";
 import { logger } from "#utils/logger.js";
 
 type CronField = {
@@ -31,6 +32,8 @@ type SchedulerRuntimeTask = {
     timer?: NodeJS.Timeout;
     isRunning: boolean;
 };
+
+type SchedulerTrigger = "startup" | "schedule";
 
 function createRange(start: number, end: number, step = 1): number[] {
     const values: number[] = [];
@@ -158,6 +161,7 @@ function getScheduleLabel(task: SchedulerRuntimeTask): string {
 }
 
 export function createScheduler(tasks: SchedulerTask[]): Scheduler {
+    const jobRunsRepository = createJobRunsRepository();
     const runtimeTasks = tasks.map<SchedulerRuntimeTask>((task) => {
         validateTask(task);
 
@@ -170,19 +174,74 @@ export function createScheduler(tasks: SchedulerTask[]): Scheduler {
 
     let isStarted = false;
 
-    const executeTask = async (task: SchedulerRuntimeTask) => {
+    const executeTask = async (task: SchedulerRuntimeTask, trigger: SchedulerTrigger) => {
         if (task.isRunning) {
             logger.warn(`Task "${task.config.name}" is still running. Skip current tick`);
             return;
         }
 
         task.isRunning = true;
+        const startedAt = new Date();
+        const baseDetails = {
+            trigger,
+            cron: task.config.cron,
+        };
+        let jobRunId: number | null = null;
 
         try {
+            logger.info(`Task "${task.config.name}" started`, baseDetails);
+
+            try {
+                jobRunId = await jobRunsRepository.start({
+                    jobName: task.config.name,
+                    startedAt,
+                    details: baseDetails,
+                });
+            } catch (error) {
+                logger.error(`Failed to write running job_run for "${task.config.name}"`, error);
+            }
+
             await task.config.run();
-            logger.info(`Task "${task.config.name}" completed`);
+            const finishedAt = new Date();
+            const successDetails = {
+                ...baseDetails,
+                duration_ms: finishedAt.getTime() - startedAt.getTime(),
+            };
+
+            logger.info(`Task "${task.config.name}" completed`, successDetails);
+
+            if (jobRunId !== null) {
+                try {
+                    await jobRunsRepository.finishSuccess({
+                        jobRunId,
+                        finishedAt,
+                        details: successDetails,
+                    });
+                } catch (error) {
+                    logger.error(`Failed to write successful job_run for "${task.config.name}"`, error);
+                }
+            }
         } catch (error) {
+            const finishedAt = new Date();
+            const errorDetails = {
+                ...baseDetails,
+                duration_ms: finishedAt.getTime() - startedAt.getTime(),
+            };
+
             logger.error(`Task "${task.config.name}" failed`, error);
+
+            if (jobRunId !== null) {
+                try {
+                    await jobRunsRepository.finishError({
+                        jobRunId,
+                        finishedAt,
+                        details: errorDetails,
+                        error,
+                    });
+                } catch (jobRunError) {
+                    logger.error(`Failed to write failed job_run for "${task.config.name}"`, jobRunError);
+                }
+            }
         } finally {
             task.isRunning = false;
         }
@@ -197,7 +256,7 @@ export function createScheduler(tasks: SchedulerTask[]): Scheduler {
 
         task.timer = setTimeout(() => {
             task.timer = undefined;
-            void executeTask(task);
+            void executeTask(task, "schedule");
             scheduleNextRun(task);
         }, delayMs);
     };
@@ -212,7 +271,7 @@ export function createScheduler(tasks: SchedulerTask[]): Scheduler {
 
             for (const task of runtimeTasks) {
                 if (task.config.runOnStart ?? true) {
-                    void executeTask(task);
+                    void executeTask(task, "startup");
                 }
 
                 scheduleNextRun(task);

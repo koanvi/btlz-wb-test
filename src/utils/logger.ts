@@ -4,17 +4,46 @@ function getPrefix(level: LogLevel): string {
     return `[${new Date().toISOString()}] [${level}]`;
 }
 
+function normalizeLogArgument(value: unknown): unknown {
+    if (value instanceof Error) {
+        return value.stack ?? value.message;
+    }
+
+    return value;
+}
+
+function writeLog(level: LogLevel, args: unknown[]): void {
+    const normalizedArgs = args.map(normalizeLogArgument);
+
+    if (level === "ERROR") {
+        console.error(getPrefix(level), ...normalizedArgs);
+        return;
+    }
+
+    if (level === "WARN") {
+        console.warn(getPrefix(level), ...normalizedArgs);
+        return;
+    }
+
+    if (level === "DEBUG") {
+        console.debug(getPrefix(level), ...normalizedArgs);
+        return;
+    }
+
+    console.info(getPrefix(level), ...normalizedArgs);
+}
+
 export const logger = {
     info: (...args: unknown[]) => {
-        console.info(getPrefix("INFO"), ...args);
+        writeLog("INFO", args);
     },
     warn: (...args: unknown[]) => {
-        console.warn(getPrefix("WARN"), ...args);
+        writeLog("WARN", args);
     },
     error: (...args: unknown[]) => {
-        console.error(getPrefix("ERROR"), ...args);
+        writeLog("ERROR", args);
     },
     debug: (...args: unknown[]) => {
-        console.debug(getPrefix("DEBUG"), ...args);
+        writeLog("DEBUG", args);
     },
 };
