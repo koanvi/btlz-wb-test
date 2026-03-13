@@ -1,3 +1,4 @@
+import env from "#config/env/env.js";
 import { createWbTariffsClient, type WbTariffsClient } from "#modules/wb-tariffs/client.js";
 import { createWbTariffsRepository, type WbTariffsRepository } from "#modules/wb-tariffs/repository.js";
 import type {
@@ -130,7 +131,7 @@ export function createWbTariffsService(
     const repositoryFactory = dependencies.repositoryFactory ?? createWbTariffsRepository;
 
     return {
-        syncCurrentTariffs: async (date = getCurrentDateYmd()) => {
+        syncCurrentTariffs: async (date = getCurrentDateYmd(new Date(), env.APP_TIMEZONE)) => {
             const payload = await client.getBoxTariffs(date);
             assertMinimalApiPayload(payload);
 

@@ -40,6 +40,7 @@ const envSchema = z.object({
     POSTGRES_DB: z.string(),
     POSTGRES_USER: z.string(),
     POSTGRES_PASSWORD: z.string(),
+    APP_TIMEZONE: z.union([z.undefined(), z.string()]),
     WB_API_TOKEN: z.string(),
     GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string(),
     GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string(),
@@ -57,6 +58,7 @@ const parsedEnv = envSchema.parse({
     POSTGRES_DB: process.env.POSTGRES_DB,
     POSTGRES_USER: process.env.POSTGRES_USER,
     POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
+    APP_TIMEZONE: process.env.APP_TIMEZONE,
     NODE_ENV: process.env.NODE_ENV,
     WB_API_TOKEN: process.env.WB_API_TOKEN,
     GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -74,6 +76,7 @@ const googleSheetsSyncCron = normalizeOptionalString(parsedEnv.GOOGLE_SHEETS_SYN
 
 const env = {
     ...parsedEnv,
+    APP_TIMEZONE: parsedEnv.APP_TIMEZONE?.trim() || "Europe/Moscow",
     GOOGLE_SPREADSHEET_IDS: uniqueValues(parseSpreadsheetIds(parsedEnv.GOOGLE_SPREADSHEET_IDS)),
     GOOGLE_SPREADSHEET_SHEET_NAME:
         parsedEnv.GOOGLE_SPREADSHEET_SHEET_NAME?.trim() || "stocks_coefs",

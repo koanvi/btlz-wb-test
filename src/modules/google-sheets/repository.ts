@@ -1,3 +1,4 @@
+import env from "#config/env/env.js";
 import knex from "#postgres/knex.js";
 import { getCurrentDateYmd } from "#utils/helpers.js";
 import type { Knex } from "knex";
@@ -133,7 +134,7 @@ export function createGoogleSheetsRepository(db: DbExecutor = knex): GoogleSheet
             return rows.map(mapSpreadsheetRow);
         },
 
-        getTariffsForExportByDate: async (tariffDate = getCurrentDateYmd()) => {
+        getTariffsForExportByDate: async (tariffDate = getCurrentDateYmd(new Date(), env.APP_TIMEZONE)) => {
             const rows = await db<TariffExportDbRow>("tariff_box_snapshots as snapshots")
                 .innerJoin(
                     "tariff_box_warehouse_tariffs as tariffs",
