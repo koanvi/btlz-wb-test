@@ -174,6 +174,29 @@ order by id desc
 limit 20;
 ```
 
+## Тестовые данные
+
+- В проекте есть seed с тестовыми записями
+- Seed создаёт:
+  тестовый snapshot тарифов
+- Seed создаёт:
+  3 тестовых склада
+- Seed создаёт:
+  3 тестовые строки тарифов
+- Seed создаёт:
+  2 тестовые записи в `spreadsheets` со статусом `inactive`
+- Рабочие активные Google-таблицы seed не затрагивает
+
+- запуск seed локально
+```bash
+npm run seed:dev
+```
+
+- запуск seed в Docker
+```bash
+docker compose exec app npm run seed
+```
+
 ## Как проверить выгрузку в Google Sheets
 
 - Открыть таблицы из `GOOGLE_SPREADSHEET_IDS`
